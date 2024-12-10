@@ -1,0 +1,416 @@
+---
+title: "Project 2: Modeling Predictions of Used Car Prices Using Linear Regression Models"
+author: "Dennis Cruz"
+date: "2024-11-15"
+output: html_document
+---
+
+```{r}
+# Importing libraries:
+library(ggplot2)
+library(readr)
+library(patchwork)
+library(dplyr)
+
+
+# Reading Data:
+
+cars_set <- read_csv("cleaned_car_data.csv")
+
+```
+
+# Part 1: Performing EDA
+## Step 4: Hypothesis Testing in R
+
+### Hypothesis 1:
+
+- H0 = The average price of used cars is $20,000
+- HA = The average price of used cars is over $20,000
+
+```{r}
+
+# The average price for a car is 20k
+
+hypo1 = t.test(x = cars_set$price, mu = 20000, alternative = c("greater"), conf.level = 0.95)
+
+print(hypo1)
+
+```
+Since the p-value is less than 2.2e-16, which is less than the confidence level (0.5) we reject the null hypothesis and accept the alternative. The average price of used cars is over `$`20,000, with a mean of `$`22,109.62
+
+### Hypothesis 2:
+
+- H0 = Ford cars are cheaper than the average car.
+- HA = Ford cars are more expensive than the average car.
+
+```{r}
+
+# Filtering data to focus only on the Ford brand:
+
+ford_set <- cars_set %>%
+  filter(make_name == 'Ford')
+
+# Performing test:
+
+hypo2 = t.test(x = ford_set$price, mu = 22109.61, alternative = c("greater"), conf.level = 0.95)
+
+print(hypo2)
+
+```
+
+So, even though Ford has over 190,000 cars in stock, the average price for these are over the average price for most. Therefore we reject the null hypothesis, agreeing that Ford cars are more expensive in average than the average car.
+
+### Hypothesis 3:
+
+- H0 = Older cars have the most mileage on average.
+- HA = Older cars do not have the most mileage on average.
+
+```{r}
+
+# Filtering data to focus only on older cars from 1980 to 2000
+
+older_set <- cars_set %>%
+	filter(year < 2000)
+
+# Since its a comparison, we can obtain the mean mileage for newer cars: 
+
+newer_set <- cars_set %>%
+	filter(year > 2000)
+
+# Obtaining mean mileage for the data sets:
+
+mean_mileage = mean(cars_set$mileage)
+newer_mean_mileage = mean(newer_set$mileage)
+
+# Looking at means
+print(paste("Mean mileage for all cars:", mean_mileage))
+print(paste("Mean mileage for newer cars:", newer_mean_mileage))
+
+# Performing test:
+hypo3 = t.test(x = older_set$mileage, mu = newer_mean_mileage, alternative = c("less"), conf.level = 0.95)
+print(hypo3)
+```
+
+Since the mean mileage for cars built before the 2000s is 117701.9 miles, and the mean for cars built after the 2000s is 58138.15, we accept the null hypothesis: older cars tend to have the most mileage, which makes sense since it also doubles the mean average for cars built after the 2000s. This also might be deceiving if we can look at the total cars in the data-sets:
+
+```{r}
+
+print(length(older_set$mileage))
+print(length(newer_set$mileage))
+
+```
+
+There is a much bigger quantity of cars built after the 2000s, so there might be newer cars with low mileage that reduce the average of the data-set by a higher amount.
+
+### Hypothesis 4:
+
+- H0 = Hybrid cars are more expensive than Gasoline cars on average
+- HA = Hybrid cars are cheaper than Gasoline cars on average.
+
+```{r}
+
+# Filtering data to focus only Hybrid Cars
+
+hybrid_set <- cars_set %>%
+	filter(fuel_type == 'Hybrid')
+
+# Obtaining data for Gasoline cars to compare
+
+gasoline_set <- cars_set %>%
+	filter(fuel_type == 'Gasoline')
+
+# Obtaining mean price for the data sets:
+
+mean_hybrid = mean(hybrid_set$price)
+mean_gasoline = mean(gasoline_set$price)
+
+# Looking at means
+print(paste("Mean price for hybrid cars:", mean_hybrid))
+print(paste("Mean price for gasoline cars:", mean_gasoline))
+
+# Also looking at the lenght of the data to compare:
+
+print(length(hybrid_set$price))
+print(length(gasoline_set$price))
+
+# Performing test:
+hypo4 = t.test(x = hybrid_set$price, mu = mean_gasoline, alternative = c("less"), conf.level = 0.95)
+print(hypo4)
+
+```
+
+- The p_value results on 2.2e-16, this is significantly lower than the confidence value 0.05. Therefore we can reject the null hypothesis because the mean price for hybrid cars in the set is lower than gasoline cars. 
+
+- Hybrid cars tend to be newer and therefore have less data entries available, this might be why there is a greater disparity in quantity of the cars.
+
+# Part 2: Model Building:
+
+## Step 5: Model Building 
+
+### Choosing Categorical and Numerical variables:
+
+**Categories to be used:**
+
+1. "Has accidents" cars
+2. "Coupe" cars
+3. "Chevrolet" car brand
+4. "Gasoline"
+
+**Explanatory Variables:**
+
+1. Mileage
+2. Age (year)
+
+**Response Variable:**
+
+Price
+
+```{r}
+
+# Filtering data:
+
+# Function for filtering data:
+
+filtered_data <- function(data_set, column, category) { 
+	data_set %>%
+		filter({{ column }} == category)
+}
+
+# 1. Cars with accidents:
+accidents_set <- filtered_data(cars_set, has_accidents, TRUE)
+
+# 2. "Coupe" body type cars:
+coupe_set <- filtered_data(cars_set, body_type, 'Coupe')
+
+# 3. "Chevrolet" cars:
+
+chevr_set <- filtered_data(cars_set, make_name, 'Chevrolet')
+
+# 4. "Gasoline" cars: 'gasoline_set' has already been created earlier
+
+```
+
+### Building Linear Models:
+
+Generating linear models for **price** using **mileage** and **age** as explanatory variables.
+
+**Linear Model for Accidents:**
+
+```{r}
+
+# Example:
+# lm (response_variable ~ explanatory_variable, data = data set) as:
+
+# 1. Accidents set:
+
+acc_lm = lm(price ~ mileage + year, data = accidents_set)
+# summary(acc_lm)
+
+# For box plotting:
+
+acc_residuals = residuals(acc_lm) # Saving residuals
+accidents_set$lm_residuals = c(acc_residuals) # adding a column to the data set
+
+# Plotting:
+
+ggplot(accidents_set, aes(mileage + year, price)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+
+```
+
+**Linear Model for Coupe Cars:**
+
+```{r}
+
+# 2. "Coupe" set:
+
+coupe_lm = lm(price ~ mileage + year, data = coupe_set)
+summary(coupe_lm)
+
+# For boxplotting:
+coupe_residuals = residuals(coupe_lm) 
+coupe_set$coupe_residuals = c(coupe_residuals) 
+
+# Plotting:
+
+ggplot(coupe_set, aes(mileage + year, price)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+
+```
+
+**Linear Model for Chevrolet Cars**
+
+```{r}
+
+# 3. "Chevrolet" set:
+
+chev_lm = lm(price ~ mileage + year, data = chevr_set)
+summary(chev_lm)
+
+# For box plotting:
+
+chev_residuals = residuals(chev_lm) 
+chevr_set$chev_residuals = c(chev_residuals) 
+
+# Plotting:
+
+ggplot(chevr_set, aes(mileage + year, price)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+
+```
+
+**Linear Model for Gasoline Cars**
+
+```{r}
+
+# 4. "Gasoline" set:
+
+gas_lm = lm(price ~ mileage + year, data = gasoline_set)
+summary(gas_lm)
+
+# For box plotting:
+gas_residuals = residuals(gas_lm) 
+gasoline_set$gas_residuals = c(gas_residuals)
+
+# Plotting:
+ggplot(gasoline_set, aes(mileage + year, price)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+
+```
+### Boxplot Display of Residuals
+
+```{r}
+
+# For Accidents:
+acc_box = ggplot(accidents_set, aes(y = acc_residuals)) + 
+  geom_boxplot() +
+  labs(title = "Accidents Residuals Boxplot", y = "Residuals")
+
+# For Coupe Cars:
+coupe_box = ggplot(coupe_set, aes(y = coupe_residuals)) + 
+  geom_boxplot() +
+  labs(title = "Coupe Residuals Boxplot", y = "Residuals")
+
+# For Chevrolet Cars:
+chevr_box = ggplot(chevr_set, aes(y = chev_residuals)) + 
+  geom_boxplot() +
+  labs(title = "Chevrolet Residuals Boxplot", y = "Residuals")
+
+# For Gasoline Cars:
+gasoline_box = ggplot(gasoline_set, aes(y = gas_residuals)) + 
+  geom_boxplot() +
+  labs(title = "Gasoline Residuals Boxplot", y = "Residuals")
+
+# Plotting all together:
+all_boxes = acc_box + coupe_box + chevr_box + gasoline_box
+all_boxes
+
+```
+
+- As seen from the plots, there is a great amout of residuals in the data that lie out side of the mean. This mean the models are not accurate because of the amout of data that was not removed earlier.
+- The best model in terms of r-square is the accidents set with a value of 0.3. The closest to one the better the model it is and in this case this might be because there are less data entries in the data set.
+- The Coupe set has the worst r-square value at 0.18, This could be because Coupe cars tend to be more expensive or range in values more often. There are greater outliers in the dataset and the values are spread out unevenly.
+- The Chevrolet boxplots seems to be the easier to observe because there are less values. Only one greater outlier that that might be te reason for the bad model.
+- In conclusion, a cleaner dataset with reduced outliers will do for a better analysis and prediction of the data. The same code can be reused with a cleaner data to obtain better results for the precition of prices based on mileage and age of the cars.
+
+
+# Part 3:
+
+## Step 7: Prediction and Evaluation
+
+```{r}
+
+# Predicting car prices:
+
+# Function for predictions:
+predictive_price <- function(data_set, set_model){
+	
+	# Unlisting to use predict:
+	
+	mil_range = unlist(data_set$mileage)
+	year_range = unlist(data_set$year)
+	
+	# Creating new data frame:
+	explanatory_data <- tibble(
+		mileage = mil_range, # Assuming an average miles
+		year = year_range  # Assuming 40 years of predictions
+	)
+	
+	# Predictions are stored in prediction_data
+	prediction_data <- explanatory_data %>%  
+	mutate(
+		price = predict(set_model, explanatory_data)
+	)
+	
+	# See the result
+	return (prediction_data)
+}
+
+# Function for vizualiting predictions:
+
+visual_prediction <- function(data_set, prediction_data) {
+	
+  # Plot
+	ggplot(data_set, aes(mileage+year, price)) +
+	geom_point() +
+	geom_smooth(method = "lm", se = FALSE) +
+  # Adding a point layer of prediction data, colored yellow
+	geom_point(
+		data = prediction_data,
+		color = "yellow",
+		size = 0.05
+	)
+}
+
+```
+
+**Predicting per category:**
+
+1. Predicting prices based on accidents:
+```{r}
+
+predict_price_acc <- predictive_price(accidents_set, acc_lm)
+visual_predict_acc <- visual_prediction(accidents_set, predict_price_acc)
+visual_predict_acc
+
+```
+
+2. Predicting prices based on Coupe cars:
+
+```{r}
+
+predict_price_coupe <- predictive_price(coupe_set, coupe_lm)
+visual_predict_coupe <- visual_prediction(coupe_set, predict_price_coupe)
+visual_predict_coupe
+
+```
+
+3. Predicting prices based for Chevrolet cars:
+
+```{r}
+
+predict_price_chev <- predictive_price(chevr_set, chev_lm)
+visual_predict_chev <- visual_prediction(chevr_set, predict_price_chev)
+visual_predict_chev
+
+```
+
+4. Predicting prices for Gasoline fuel cars:
+
+```{r}
+
+predict_price_gas <- predictive_price(gasoline_set, gas_lm)
+visual_predict_gas <- visual_prediction(gasoline_set, predict_price_gas)
+visual_predict_gas
+
+```
+
+**Evaluation & Conclusion:**
+
+- All predictor models follow the trend of the linear model to the most extent.
+- The models have a low Coefficient of Determination because there is data that lies outside of the mean. The same project can be ran again with a much reduced data set for comparison, but variables and plots will work the same way, given more accurate results.
+- The model perform poorly retrieving negative price values because the Linear Model follow a negative correlation. As the mileage increases, the price decreases, but there can't be negative prices so the cleaning of the data should help with better results.
